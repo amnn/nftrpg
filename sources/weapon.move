@@ -2,10 +2,17 @@ module nftrpg::weapon {
     use sui::object::{Self, UID};
     use sui::tx_context::TxContext;
 
+    /// Phantom types are generic type parameters to structs that
+    /// don't show up anywhere in the struct layout.  We use it here
+    /// to have a generic object type that we can specialize to
+    /// different weapons.
     struct Weapon<phantom W> has key, store {
         id: UID,
     }
 
+    /// These are the marker classes to distinguish between different
+    /// kinds of `Weapon`.  This is similar to how `sui::coin::Coin`
+    /// works with its token marker types.
     struct Axe {}
     struct Sword {}
 
