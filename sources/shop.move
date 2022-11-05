@@ -88,7 +88,12 @@ module nftrpg::shop {
 
     /** Functions for customers ***********************************************/
 
-    public fun buy<W>(shop: &mut Shop, ctx: &TxContext): Invoice {
+    /// Buy returns two values: The weapon, and the invoice for paying
+    /// for it.  Move supports returning tuples (and destructuring
+    /// tuples that are returned), but does not support tuples as a
+    /// first class type (It is not possile to create a value with a
+    /// tuple type).
+    public fun buy<W>(shop: &mut Shop): (Weapon<W>, Invoice) {
         let l = Label<W> {};
         assert!(
             field::exists_with_type<Label<W>, Inventory<W>>(&shop.id, l),
@@ -99,12 +104,11 @@ module nftrpg::shop {
         assert!(!vector::is_empty(&inventory.items), ENoInventory);
 
         let item = vector::pop_back(&mut inventory.items);
-        transfer::transfer(item, tx_context::sender(ctx));
 
-        Invoice { value: inventory.price }
+        (item, Invoice { value: inventory.price })
     }
 
-    public entry fun sell<W>(shop: &mut Shop, ctx: &mut TxContext) {
+    public entry fun sell<W>(shop: &mut Shop, item: Weapon<W>, ctx: &mut TxContext) {
         let l = Label<W> {};
         assert!(
             field::exists_with_type<Label<W>, Inventory<W>>(&shop.id, l),
@@ -116,6 +120,7 @@ module nftrpg::shop {
 
         assert!(balance::value(&shop.earnings) > value, EShopCantAfford);
 
+        vector::push_back(&mut inventory.items, item);
         transfer::transfer(
             coin::take(&mut shop.earnings, value, ctx),
             tx_context::sender(ctx),
@@ -139,7 +144,7 @@ module nftrpg::shop {
 
         assert!(
             field::exists_with_type<Label<W>, Inventory<W>>(&shop.id, l),
-            ENoInventory,
+            EUnrecognizedWeapon,
         );
 
         let inventory = field::borrow_mut<Label<W>, Inventory<W>>(&mut shop.id, l);
