@@ -1,3 +1,13 @@
+/// This module defines a `Shop` as a shared object that anyone can
+/// interact with to buy and sell weapons, but that only someone with
+/// the `OwnerCap` can interact with to extract money and restock
+/// weapons.
+///
+/// The shop also uses the "Hot Potato" pattern to implement a
+/// "buy-now-pay-later" scheme which allows users to purchase a weapon
+/// without paying for it up-front, but with a type-system guarantee
+/// that any successful transaction involving a purchase will also
+/// involve a payment.
 module nftrpg::shop {
     use std::vector;
 
@@ -10,6 +20,8 @@ module nftrpg::shop {
     use nftrpg::coin::COIN as RPG;
     use nftrpg::weapon::{Self, Axe, Sword, Weapon};
     
+    /// The shop it self -- we create one of these on module
+    /// initialization and share it.
     struct Shop has key {
         id: UID,
         earnings: Balance<RPG>,
@@ -17,10 +29,31 @@ module nftrpg::shop {
         swords: vector<Weapon<Sword>>,
     }
 
+    /// The Owner Capability, which grants special privileges for
+    /// addresses with access to it.  Because there is only one
+    /// instance of `Shop` created for this module, we don't need to
+    /// add any additional data to `OwnerCap` to distinguish which
+    /// shop it indicated ownership of.  If this module could create
+    /// multiple shops, we would need to add `shop_id: ID` as a field
+    /// to `OwnerCap` and check `owner.shop_id == object::id(&shop)`
+    /// before every transaction that required an `OwnerCap`.
     struct OwnerCap has key {
         id: UID,
     }
 
+    /// This type represents the Hot Potato. It is a type without
+    /// abilities, which means that once it is created, it cannot be
+    /// stored on chain (no key), wrapped in another object (no
+    /// store), duplicated (no copy), or go out of scope (no drop).
+    ///
+    /// This means that in order for a transaction that creates an
+    /// `Invoice` to succeed, it also needs to pass that invoice to a
+    /// function that will clean it up (by unpacking it).
+    ///
+    /// Modules can use this guarantee to require that if some actions
+    /// take place during a transaction, that some other actions must
+    /// follow, by making the first action return a hot potato, and
+    /// the potential follow-up actions accept it and unpack it.
     struct Invoice {
         value: u64,
     }
@@ -48,7 +81,8 @@ module nftrpg::shop {
         transfer::share_object(shop);
     }
 
-    // Functions for customers
+    /** Functions for customers ***********************************************/
+
     public fun buy_axe(shop: &mut Shop, ctx: &TxContext): Invoice {
         assert!(!vector::is_empty(&shop.axes), ENoInventory);
         let axe = vector::pop_back(&mut shop.axes);
@@ -77,7 +111,7 @@ module nftrpg::shop {
         vector::push_back(&mut shop.axes, axe);
     }
 
-    // Functions for owners
+    /** Functions for owners **************************************************/
 
     public entry fun add_axe(
         _: &OwnerCap,
