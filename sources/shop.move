@@ -111,6 +111,14 @@ module nftrpg::shop {
         vector::push_back(&mut shop.axes, axe);
     }
 
+    public fun trade_in_sword(shop: &mut Shop, invoice: Invoice, sword: Weapon<Sword>, coin: Coin<RPG>) {
+        let Invoice { value } = invoice;
+        let value = value - SWORD_PRICE * 3 / 4;
+        assert!(coin::value(&coin) == value, EWrongPrice);
+        balance::join(&mut shop.earnings, coin::into_balance(coin));
+        vector::push_back(&mut shop.swords, sword);
+    }
+
     /** Functions for owners **************************************************/
 
     public entry fun add_axe(
