@@ -14,19 +14,28 @@ module nftrpg::shop {
     use sui::object::{Self, UID};
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
+    use sui::dynamic_field as field;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     use nftrpg::coin::COIN as RPG;
-    use nftrpg::weapon::{Self, Axe, Sword, Weapon};
+    use nftrpg::weapon::Weapon;
     
     /// The shop it self -- we create one of these on module
     /// initialization and share it.
     struct Shop has key {
         id: UID,
         earnings: Balance<RPG>,
-        axes: vector<Weapon<Axe>>,
-        swords: vector<Weapon<Sword>>,
+    }
+
+    /// Label is the field name we will use for attaching inventories
+    /// of different types of weapon on the `Shop`.  It allows us to
+    /// store and access values keyed by a type (in this case `W`).
+    struct Label<phantom W> has copy, drop, store {}
+
+    struct Inventory<phantom W> has store {
+        price: u64,
+        items: vector<Weapon<W>>,
     }
 
     /// The Owner Capability, which grants special privileges for
@@ -60,17 +69,11 @@ module nftrpg::shop {
 
     const ENoInventory: u64 = 0;
     const EWrongPrice: u64 = 1;
-    const EWrongOwner: u64 = 2;
-
-    const AXE_PRICE: u64 = 1000;
-    const SWORD_PRICE: u64 = 2000;
 
     fun init(ctx: &mut TxContext) {
         let shop = Shop {
             id: object::new(ctx),
             earnings: balance::zero(),
-            axes: vector::empty(),
-            swords: vector::empty(),
         };
 
         transfer::transfer(
@@ -83,18 +86,20 @@ module nftrpg::shop {
 
     /** Functions for customers ***********************************************/
 
-    public fun buy_axe(shop: &mut Shop, ctx: &TxContext): Invoice {
-        assert!(!vector::is_empty(&shop.axes), ENoInventory);
-        let axe = vector::pop_back(&mut shop.axes);
-        transfer::transfer(axe, tx_context::sender(ctx));
-        Invoice { value: AXE_PRICE }
-    }
+    public fun buy<W>(shop: &mut Shop, ctx: &TxContext): Invoice {
+        let l = Label<W> {};
+        assert!(
+            field::exists_with_type<Label<W>, Inventory<W>>(&shop.id, l),
+            ENoInventory
+        );
 
-    public fun buy_sword(shop: &mut Shop, ctx: &TxContext): Invoice {
-        assert!(!vector::is_empty(&shop.swords), ENoInventory);
-        let sword = vector::pop_back(&mut shop.swords);
-        transfer::transfer(sword, tx_context::sender(ctx));
-        Invoice { value: SWORD_PRICE }
+        let inventory = field::borrow_mut<Label<W>, Inventory<W>>(&mut shop.id, l);
+        assert!(!vector::is_empty(&inventory.items), ENoInventory);
+
+        let item = vector::pop_back(&mut inventory.items);
+        transfer::transfer(item, tx_context::sender(ctx));
+
+        Invoice { value: inventory.price }
     }
 
     public fun pay_in_full(shop: &mut Shop, invoice: Invoice, coin: Coin<RPG>) {
@@ -103,40 +108,46 @@ module nftrpg::shop {
         balance::join(&mut shop.earnings, coin::into_balance(coin));
     }
 
-    public fun trade_in_axe(shop: &mut Shop, invoice: Invoice, axe: Weapon<Axe>, coin: Coin<RPG>) {
+    public fun trade_in<W>(
+        shop: &mut Shop,
+        invoice: Invoice,
+        item: Weapon<W>,
+        coin: Coin<RPG>,
+    ) {
         let Invoice { value } = invoice;
-        let value = value - AXE_PRICE * 3 / 4;
-        assert!(coin::value(&coin) == value, EWrongPrice);
-        balance::join(&mut shop.earnings, coin::into_balance(coin));
-        vector::push_back(&mut shop.axes, axe);
-    }
+        let l = Label<W> {};
 
-    public fun trade_in_sword(shop: &mut Shop, invoice: Invoice, sword: Weapon<Sword>, coin: Coin<RPG>) {
-        let Invoice { value } = invoice;
-        let value = value - SWORD_PRICE * 3 / 4;
+        assert!(
+            field::exists_with_type<Label<W>, Inventory<W>>(&shop.id, l),
+            ENoInventory,
+        );
+
+        let inventory = field::borrow_mut<Label<W>, Inventory<W>>(&mut shop.id, l);
+
+        // Deduct 75% of item value from cost as benefit of trading in.
+        value = value - inventory.price * 3 / 4;
         assert!(coin::value(&coin) == value, EWrongPrice);
+
         balance::join(&mut shop.earnings, coin::into_balance(coin));
-        vector::push_back(&mut shop.swords, sword);
+        vector::push_back(&mut inventory.items, item);
     }
 
     /** Functions for owners **************************************************/
 
-    public entry fun add_axe(
-        _: &OwnerCap,
-        shop: &mut Shop,
-        ctx: &mut TxContext,
-    ) {
-        let axe = weapon::create_axe(ctx);
-        vector::push_back(&mut shop.axes, axe);
+    public entry fun add_item_type<W>(_: &OwnerCap, shop: &mut Shop, price: u64) {
+        field::add(&mut shop.id, Label<W> {}, Inventory<W> {
+            price,
+            items: vector::empty(),
+        })
     }
 
-    public entry fun add_sword(
-        _: &OwnerCap,
-        shop: &mut Shop,
-        ctx: &mut TxContext,
-    ) {
-        let sword = weapon::create_sword(ctx);
-        vector::push_back(&mut shop.swords, sword);
+    public entry fun add_item<W>(_: &OwnerCap, shop: &mut Shop, item: Weapon<W>) {
+        let inventory = field::borrow_mut<Label<W>, Inventory<W>>(
+            &mut shop.id,
+            Label<W> {},
+        );
+
+        vector::push_back(&mut inventory.items, item);
     }
 
     public entry fun take_earnings(
