@@ -3,6 +3,7 @@ module nftrpg::avatar {
     use std::string::{Self, String};
     use sui::coin::{Self, Coin};
     use sui::dynamic_object_field as ofield;
+    use sui::event;
     use sui::object::{Self, ID, UID};
     use sui::transfer;
     use sui::tx_context::TxContext;
@@ -18,6 +19,11 @@ module nftrpg::avatar {
         name: String,
         weapon: Option<ID>,
         gold: Coin<RPG>,
+    }
+
+    /// Event to signal avatar has swung their weapon.
+    struct WeaponSwingEvent has copy, drop {
+        weapon_id: ID,
     }
 
     /// It's common practice to record the error codes that functions
@@ -84,6 +90,17 @@ module nftrpg::avatar {
         coin::split(&mut avatar.gold, amount, ctx)
     }
 
+    public fun swing_weapon<W>(avatar: &Avatar) {
+        assert!(option::is_some(&avatar.weapon), ENotWielding);
+
+        // Events can be emitted during a move transaction and then
+        // read by external tools.  There is no way to inspect the
+        // events emitted from within Move.
+        event::emit(WeaponSwingEvent {
+            weapon_id: *option::borrow(&avatar.weapon),
+        });
+    }
+
     public fun wield<W>(avatar: &mut Avatar, w: Weapon<W>) {
         assert!(option::is_none(&avatar.weapon), EAlreadyWielding);
         option::fill(&mut avatar.weapon, object::id(&w));
@@ -101,7 +118,7 @@ module nftrpg::avatar {
     public fun unwield<W>(avatar: &mut Avatar): Weapon<W> {
         assert!(option::is_some(&avatar.weapon), ENotWielding);
         assert!(ofield::exists_with_type<vector<u8>, Weapon<W>>(
-            &avatar.id, b"weapon"
+            &avatar.id, b"weapon",
         ), EWrongWeapon);
 
         let _ = option::extract(&mut avatar.weapon);
