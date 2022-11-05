@@ -69,6 +69,8 @@ module nftrpg::shop {
 
     const ENoInventory: u64 = 0;
     const EWrongPrice: u64 = 1;
+    const EUnrecognizedWeapon: u64 = 2;
+    const EShopCantAfford: u64 = 3;
 
     fun init(ctx: &mut TxContext) {
         let shop = Shop {
@@ -90,7 +92,7 @@ module nftrpg::shop {
         let l = Label<W> {};
         assert!(
             field::exists_with_type<Label<W>, Inventory<W>>(&shop.id, l),
-            ENoInventory
+            EUnrecognizedWeapon,
         );
 
         let inventory = field::borrow_mut<Label<W>, Inventory<W>>(&mut shop.id, l);
@@ -100,6 +102,24 @@ module nftrpg::shop {
         transfer::transfer(item, tx_context::sender(ctx));
 
         Invoice { value: inventory.price }
+    }
+
+    public entry fun sell<W>(shop: &mut Shop, ctx: &mut TxContext) {
+        let l = Label<W> {};
+        assert!(
+            field::exists_with_type<Label<W>, Inventory<W>>(&shop.id, l),
+            EUnrecognizedWeapon,
+        );
+
+        let inventory = field::borrow_mut<Label<W>, Inventory<W>>(&mut shop.id, l);
+        let value = inventory.price / 2;
+
+        assert!(balance::value(&shop.earnings) > value, EShopCantAfford);
+
+        transfer::transfer(
+            coin::take(&mut shop.earnings, value, ctx),
+            tx_context::sender(ctx),
+        );
     }
 
     public fun pay_in_full(shop: &mut Shop, invoice: Invoice, coin: Coin<RPG>) {
