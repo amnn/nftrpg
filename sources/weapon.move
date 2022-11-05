@@ -15,6 +15,7 @@ module nftrpg::weapon {
     /// works with its token marker types.
     struct Axe {}
     struct Sword {}
+    struct Bow {}
 
     public fun create_axe(ctx: &mut TxContext): Weapon<Axe> {
         Weapon<Axe> { id: object::new(ctx) }
@@ -22,5 +23,9 @@ module nftrpg::weapon {
 
     public fun create_sword(ctx: &mut TxContext): Weapon<Sword> {
         Weapon<Sword> { id: object::new(ctx) }
+    }
+
+    public fun create_bow(ctx: &mut TxContext): Weapon<Bow> {
+        Weapon<Bow> { id: object::new(ctx) }
     }
 }
