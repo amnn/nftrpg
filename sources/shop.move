@@ -1,3 +1,5 @@
+// Copyright (c) 2022 Ashok Menon
+
 /// This module defines a `Shop` as a shared object that anyone can
 /// interact with to buy and sell weapons, but that only someone with
 /// the `OwnerCap` can interact with to extract money and restock

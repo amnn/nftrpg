@@ -1,3 +1,5 @@
+// Copyright (c) 2022 Ashok Menon
+
 module nftrpg::demo {
     use sui::tx_context::TxContext;
 

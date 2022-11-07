@@ -1,3 +1,5 @@
+// Copyright (c) 2022 Ashok Menon
+
 module nftrpg::avatar {
     use std::option::{Self, Option};
     use std::string::{Self, String};

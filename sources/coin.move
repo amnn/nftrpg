@@ -1,3 +1,5 @@
+// Copyright (c) 2022 Ashok Menon
+
 /// An implementation of an ERC20-like Token, using Sui's built-in
 /// `Coin` type.
 module nftrpg::coin {

@@ -1,3 +1,5 @@
+// Copyright (c) 2022 Ashok Menon
+
 module nftrpg::weapon {
     use sui::object::{Self, UID};
     use sui::tx_context::TxContext;
